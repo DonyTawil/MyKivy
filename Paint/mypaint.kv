@@ -1,0 +1,19 @@
+<ColorChoice>:
+    canvas:
+        Color:
+            rgb: self.color[0], self.color[1], self.color[2]
+        Rectangle:
+            size: 10, 10
+            pos: self.pos
+
+#<MyPaintWidget>:
+#    the_grid: grid
+#    GridLayout:          #This caused the problem that self.the_grid started being a None object
+#        id: grid
+#        cols: 2
+#        row_force_default: True
+#        row_default_height: 30
+#        pos: (200, 200)
+#        size: (200, 200)
+#        on_size: print args
+#        on_pos: print args
