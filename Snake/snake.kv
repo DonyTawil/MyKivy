@@ -1,0 +1,9 @@
+#: kivy 1.8.0
+
+<SnakePart>:
+    canvas:
+        Color:
+            rgb: self.color if self.color != [] else (1, 1, 1)
+        Ellipse:
+            pos: self.pos
+            size: self.part_size
