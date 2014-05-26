@@ -7,7 +7,12 @@ from kivy.vector import Vector
 from kivy.graphics import Line
 from dirline import SnakePalette
 from snakepart import SnakePart
-from math import pi, cos, sin, atan
+from math import pi, cos, sin
+from lines import BoundaryLine
+from scipy.interpolate import interp1d
+import numpy as np
+
+##Maybe use sets to remove duplicates A set has only unique elements list(set(foo))
 
 #some global constants
 snake_part_size = 10, 10
@@ -21,10 +26,6 @@ background_color = [0, 1, 0]
 divide_length = 12
 #initial length
 initial_length = 6
-#Boundary length
-bnum = 10
-#boundary angle
-bangle = float(170) / 180 * pi
 
 
 class Snake(Widget):
@@ -39,7 +40,10 @@ class Snake(Widget):
     #Property to check if snake has currently
     #a part outside
     is_outside = BooleanProperty(False)
-    boundary_line = ListProperty([])
+    #bl = BoundaryLine instance
+    bl = ObjectProperty(None)
+    #Points to interpolate
+    touch_pointsi = ListProperty([])
 
     def __init__(self, **kwargs):
         super(Snake, self).__init__(**kwargs)
@@ -48,6 +52,8 @@ class Snake(Widget):
         # touch, so that he can guide the snake
         self.snake_globe = ObjectProperty(None)
         self.snake_palette = SnakePalette()
+        self.bl = BoundaryLine()
+        self.add_widget(self.bl)
 
     def initial_parts(self, n):
         for i in range(n):
@@ -96,7 +102,7 @@ class Snake(Widget):
 
     def assign_head_dir_velocity(self):
         if self.next_position:
-            self.snake_head.velocity = (self.next_position[0] - self.snake_head.center_x) \
+            self.snake_head.velocity = (self.next_position[0] - self.snake_head.center_x)\
                 , (self.next_position[1] - self.snake_head.center_y)
         else:
             #if no next position just keep the same velocity
@@ -171,8 +177,7 @@ class Snake(Widget):
             snake_head_pos = self.snake_parts[0].center[:]
             self.snake_palette.clear(snake_head_pos, self.direction_line)
 
-        if self.boundary_line:
-            self.assign_boundary()
+        self.bl.set_lcoord(self.snake_head.center, self.snake_head.velocity)
 
         self.did_snake_suicide()
 
@@ -185,9 +190,7 @@ class Snake(Widget):
     def on_touch_down(self, touch):
         if self.snake_globe.collide_point(*touch.pos):
             touch.grab(self)
-            #draw the boundary line
-            self.assign_boundary()
-            #allow to draw direction lines agian
+            #allow to draw direction lines again
             self.do_draw = True
             with self.snake_palette.canvas:
                 touch.ud['line'] = Line(points = (touch.x, touch.y))
@@ -206,10 +209,45 @@ class Snake(Widget):
         if self.snake_head.collide_point(*snake_part_center):
             return True
 
+    def remove_cons(self, list1, list2):
+        #function that removes consecutives duplicates iff
+        #there are duplicates in both list1 and list2 at the
+        #same position
+        x = [list1[0]]
+        y = [list2[0]]
+        print list1, list2
+        print "len",len(list1)
+        print "len2", len(list2)
+        if len(list1) > 1:
+            for i in range(1, len(list1)):
+                if (list1[i], list2[i]) != (list1[i - 1], list2[i - 1]):
+                    x.append(list1[i])
+                    y.append(list2[i])
+        return x, y
+
     def on_touch_move(self, touch):
+        ##Now have to fix this function
         if touch.grab_current is self and self.do_draw:
             touch.ud['line'].points += [touch.x, touch.y]
             self.direction_line.extend([touch.x, touch.y])
+            x, y = self.extract(touch.ud['line'].points)
+            x, y = self.remove_cons(x, y)
+            if len(x) > 4:
+                interp = np.polyfit(x, y, 2)
+                interp = np.poly1d(interp)
+
+                xstart = int(x[0])
+                xend = int(x[-1])
+                list = []
+                for i in range(xstart, xend):
+                    list += [i, int(interp(i))]
+                touch.ud['line'].points = list
+                self.direction_line = list
+
+    def extract(self, list):
+        x = [i for i in list if list.index(i) % 2 == 0]
+        y = [i for i in list if i not in x]
+        return x, y
 
     def check_if_ate(self, parent):
         if parent.da_food.is_eaten:
@@ -233,24 +271,3 @@ class Snake(Widget):
             snake_part = self.snake_parts[-1]
             self.remove_widget(snake_part)
             self.snake_parts.pop(-1)
-
-    def assign_boundary(self):
-        #A function that returns where the player is allowed
-        #to draw near head
-        x0 = self.snake_head.pos[0]
-        y0 = self.snake_head.pos[1]
-        radius = snake_part_size[0]
-        if self.snake_head.velocity[0]:
-            theta = atan(float(self.snake_head.velocity[1]) / self.snake_head.velocity[0])
-        elif self.snake_head.velocity[1] > 1:
-            theta = float(pi) / 2
-        else:
-            theta = float(pi) * 3
-        #Circular function of radius r and angle theta
-        x1 = x0 + radius * cos(float(pi) / 2 + theta)
-        y1 = y0 + radius * sin(float(pi) / 2 + theta)
-        x2 = x1 + bnum * cos(theta + bangle)
-        y2 = y1 + bnum * sin(theta + bangle)
-        self.boundary_line = [x1, y1, x2, y2]
-
-
